@@ -1,7 +1,14 @@
-import express, { type Request, Response, NextFunction } from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+
+// Set development mode by default
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = "development";
+}
+
+
 
 const app = express();
 const httpServer = createServer(app);
@@ -36,7 +43,7 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
 
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
@@ -62,9 +69,15 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    const status = err && typeof err === "object" && "status" in err 
+      ? (err as { status: number }).status 
+      : err && typeof err === "object" && "statusCode" in err 
+        ? (err as { statusCode: number }).statusCode 
+        : 500;
+    const message = err && typeof err === "object" && "message" in err 
+      ? (err as { message: string }).message 
+      : "Internal Server Error";
 
     console.error("Internal Server Error:", err);
 
@@ -90,14 +103,7 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+  httpServer.listen(port, "0.0.0.0", () => {
+    log(`serving on port ${port}`);
+  });
 })();
